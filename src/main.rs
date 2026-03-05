@@ -1,29 +1,22 @@
 use bhdump::browsers::{self, BrowserKind};
-use bhdump::filter::FilterConfig;
+use bhdump::filter::{FilterConfig, SortKey, WhereExpr};
 use bhdump::format::{self, OutputFormat};
 use bhdump::timestamp;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 use std::process::ExitCode;
 
 /// Export browser history in JSON, CSV, and other formats.
 #[derive(Parser, Debug)]
-#[command(name = "bhdump", version, about)]
+#[command(name = "bhdump", version, about, after_long_help = FILTER_HELP)]
 struct Cli {
     /// Include only these browsers (can be repeated)
     #[arg(short, long = "browser", value_parser = parse_browser)]
     browsers: Vec<BrowserKind>,
 
-    /// Exclude these browsers (can be repeated)
-    #[arg(long = "exclude-browser", value_parser = parse_browser)]
-    exclude_browsers: Vec<BrowserKind>,
-
-    /// Include only these profile names (can be repeated)
+    /// Include only these profiles (can be repeated, case-insensitive)
     #[arg(short, long = "profile")]
     profiles: Vec<String>,
-
-    /// Exclude these profile names (can be repeated)
-    #[arg(long = "exclude-profile")]
-    exclude_profiles: Vec<String>,
 
     /// Output format: json, jsonl, csv, tsv
     #[arg(short, long, default_value = "json", value_parser = parse_format)]
@@ -33,33 +26,21 @@ struct Cli {
     #[arg(short, long)]
     output: Option<String>,
 
-    /// Only entries after this time (ISO 8601 or relative: 7d, 2w, 3mo, 1y)
+    /// Only entries after this time (ISO 8601, relative, or natural language)
     #[arg(long)]
     since: Option<String>,
 
-    /// Only entries before this time (ISO 8601 or relative)
+    /// Only entries before this time (ISO 8601, relative, or natural language)
     #[arg(long)]
     before: Option<String>,
 
-    /// Include only URLs matching this regex
-    #[arg(long)]
-    url: Option<String>,
+    /// Filter entries with a CEL expression (e.g. 'url.contains("github")')
+    #[arg(short, long = "where", value_name = "EXPR")]
+    where_expr: Option<String>,
 
-    /// Exclude URLs matching this regex
-    #[arg(long)]
-    exclude_url: Option<String>,
-
-    /// Include only these domains (can be repeated)
-    #[arg(long)]
-    domain: Vec<String>,
-
-    /// Include only titles matching this regex
-    #[arg(long)]
-    title: Option<String>,
-
-    /// Minimum visit count
-    #[arg(long)]
-    min_visits: Option<u64>,
+    /// Sort order: field name, prefix with - for descending (e.g. -visit_count)
+    #[arg(short, long, value_parser = parse_sort)]
+    sort: Option<SortKey>,
 
     /// Maximum number of entries to return
     #[arg(long)]
@@ -85,9 +66,17 @@ struct Cli {
     #[arg(long)]
     list_browsers: bool,
 
+    /// Generate shell completions and exit (bash, zsh, fish, elvish, powershell)
+    #[arg(long, value_name = "SHELL")]
+    completions: Option<Shell>,
+
     /// Increase verbosity
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
+
+    /// Shorthand for --since (e.g. "today", "3 days ago", "last friday", "7d")
+    #[arg(value_name = "SINCE")]
+    since_positional: Option<String>,
 }
 
 fn parse_browser(s: &str) -> Result<BrowserKind, String> {
@@ -98,8 +87,116 @@ fn parse_format(s: &str) -> Result<OutputFormat, String> {
     s.parse()
 }
 
+fn parse_sort(s: &str) -> Result<SortKey, String> {
+    s.parse()
+}
+
+const FILTER_HELP: &str = "\
+\x1b[1;4mFilter Expressions\x1b[0m
+
+  The --where flag accepts an expression in CEL (Common Expression Language)
+  that is evaluated against each history entry. Only entries where the
+  expression returns true are included in the output.
+
+  \x1b[1mAvailable fields:\x1b[0m
+
+    url           string     Full URL of the page
+    domain        string     Hostname extracted from the URL
+    title         string     Page title (empty string if absent)
+    visit_count   int        Aggregate visit count (0 if absent)
+    browser       string     Browser name (chrome, firefox, safari, ...)
+    profile       string     Profile name
+    visit_time    timestamp  When the page was visited
+
+  \x1b[1mString methods:\x1b[0m
+
+    s.contains(\"sub\")        true if s contains the substring
+    s.startsWith(\"prefix\")   true if s starts with the prefix
+    s.endsWith(\"suffix\")     true if s ends with the suffix
+    s.matches(\"regex\")       true if s matches the regular expression
+    s.size()                 length of the string
+
+  \x1b[1mOperators:\x1b[0m
+
+    ==  !=  <  <=  >  >=    comparison
+    &&  ||  !               logical and, or, not
+    +                       string concatenation
+    in                      membership (e.g. browser in [\"chrome\", \"edge\"])
+
+  \x1b[1mTimestamp functions:\x1b[0m
+
+    timestamp(\"2024-01-15T00:00:00Z\")   parse an RFC 3339 timestamp
+
+  \x1b[1mExamples:\x1b[0m
+
+    --where 'url.contains(\"github.com\")'
+    --where 'domain == \"github.com\"'
+    --where 'title.matches(\"(?i)rust\") && visit_count > 5'
+    --where 'browser == \"firefox\" || browser == \"safari\"'
+    --where '!url.matches(\"reddit\\\\.com\")'
+    --where 'visit_time > timestamp(\"2024-06-01T00:00:00Z\")'
+
+  See https://cel-spec.dev for the full CEL specification.
+
+\x1b[1;4mSort Order\x1b[0m
+
+  The --sort flag takes a field name, optionally prefixed with - for descending
+  or + for ascending (ascending is the default).
+
+  \x1b[1mSort fields:\x1b[0m  url, title, time, count, browser, profile, domain
+
+  \x1b[1mExamples:\x1b[0m
+
+    --sort url                 alphabetical by URL
+    --sort -count              most-visited first
+    --sort domain              group by domain
+    --sort -time               most recent first (same as default)
+
+  Without --sort, entries are ordered by visit_time descending (most recent
+  first). Sorting is applied after filtering but before --limit.
+
+\x1b[1;4mTime Shorthands\x1b[0m
+
+  A positional argument can be used as shorthand for --since. All of these
+  also work with the --since and --before flags.
+
+  \x1b[1mKeywords:\x1b[0m
+
+    bhdump today               entries from today (midnight UTC)
+    bhdump yesterday           entries from yesterday onward
+
+  \x1b[1mCompact:\x1b[0m
+
+    bhdump 7d                  7 days ago
+    bhdump 2w                  2 weeks ago
+    bhdump 3mo                 3 months ago
+    bhdump 1y                  1 year ago
+    bhdump 12h                 12 hours ago
+
+  \x1b[1mNatural language:\x1b[0m
+
+    bhdump last-week           last 7 days (midnight UTC)
+    bhdump last-month          last 30 days (midnight UTC)
+    bhdump \"last friday\"       last Friday
+    bhdump \"3 days ago\"        3 days ago
+    bhdump \"2 hours ago\"       2 hours ago
+    bhdump \"next april\"        April 1 of next year (if April has passed)
+
+  \x1b[1mAbsolute dates:\x1b[0m
+
+    bhdump 2024-01-01          January 1, 2024
+    bhdump \"April 1, 2024\"     same, with month name
+    bhdump 2024-01-15T10:30:00Z  ISO 8601 with time";
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    // Generate shell completions and exit
+    if let Some(shell) = cli.completions {
+        let mut cmd = Cli::command();
+        clap_complete::generate(shell, &mut cmd, "bhdump", &mut std::io::stdout());
+        return ExitCode::SUCCESS;
+    }
 
     // Discover browsers
     let all_sources = browsers::discover();
@@ -120,22 +217,15 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    // Filter sources by browser include/exclude
+    // Filter sources by browser and profile selection
+    let profiles_lower: Vec<String> = cli.profiles.iter().map(|p| p.to_lowercase()).collect();
     let sources: Vec<_> = all_sources
         .into_iter()
         .filter(|s| {
-            // Browser include/exclude
             if !cli.browsers.is_empty() && !cli.browsers.contains(&s.browser) {
                 return false;
             }
-            if cli.exclude_browsers.contains(&s.browser) {
-                return false;
-            }
-            // Profile include/exclude
-            if !cli.profiles.is_empty() && !cli.profiles.contains(&s.profile) {
-                return false;
-            }
-            if cli.exclude_profiles.contains(&s.profile) {
+            if !profiles_lower.is_empty() && !profiles_lower.contains(&s.profile.to_lowercase()) {
                 return false;
             }
             true
@@ -147,8 +237,18 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
+    // Resolve --since vs positional shorthand
+    let since_raw = match (&cli.since, &cli.since_positional) {
+        (Some(_), Some(_)) => {
+            eprintln!("Error: cannot use both --since and a positional time argument");
+            return ExitCode::from(2);
+        }
+        (Some(s), None) | (None, Some(s)) => Some(s.as_str()),
+        (None, None) => None,
+    };
+
     // Parse date filters
-    let since = match cli.since.as_deref().map(timestamp::parse_user_datetime) {
+    let since = match since_raw.map(timestamp::parse_user_datetime) {
         Some(Ok(dt)) => Some(dt),
         Some(Err(e)) => {
             eprintln!("Error parsing --since: {e}");
@@ -189,7 +289,13 @@ fn main() -> ExitCode {
     };
 
     // Apply filters
-    let filtered = filter_config.apply(entries);
+    let filtered = match filter_config.apply(entries) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Error evaluating --where expression: {e}");
+            return ExitCode::from(2);
+        }
+    };
 
     // Write output
     let result = if let Some(ref path) = cli.output {
@@ -216,42 +322,19 @@ fn main() -> ExitCode {
 }
 
 fn build_filter(cli: &Cli) -> Result<FilterConfig, String> {
-    let url_pattern = cli
-        .url
+    let where_expr = cli
+        .where_expr
         .as_deref()
-        .map(regex::Regex::new)
+        .map(WhereExpr::compile)
         .transpose()
-        .map_err(|e| format!("Invalid --url regex: {e}"))?;
-
-    let url_exclude = cli
-        .exclude_url
-        .as_deref()
-        .map(regex::Regex::new)
-        .transpose()
-        .map_err(|e| format!("Invalid --exclude-url regex: {e}"))?;
-
-    let title_pattern = cli
-        .title
-        .as_deref()
-        .map(regex::Regex::new)
-        .transpose()
-        .map_err(|e| format!("Invalid --title regex: {e}"))?;
-
-    let domains = if cli.domain.is_empty() {
-        None
-    } else {
-        Some(cli.domain.clone())
-    };
+        .map_err(|e| format!("Invalid --where expression: {e}"))?;
 
     Ok(FilterConfig {
-        url_pattern,
-        url_exclude,
-        title_pattern,
-        domains,
-        min_visit_count: cli.min_visits,
+        where_expr,
         limit: cli.limit,
         deduplicate: cli.dedup,
         include_internal: cli.include_internal,
         include_noise: cli.include_noise,
+        sort: cli.sort,
     })
 }

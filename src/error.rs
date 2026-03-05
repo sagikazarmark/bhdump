@@ -15,9 +15,6 @@ pub enum Error {
     #[error("CSV error: {0}")]
     Csv(#[from] csv::Error),
 
-    #[error("Invalid regex: {0}")]
-    Regex(#[from] regex::Error),
-
     #[error("Database not found: {}", .0.display())]
     DatabaseNotFound(PathBuf),
 
@@ -29,6 +26,9 @@ pub enum Error {
 
     #[error("Invalid date/time: {0}")]
     InvalidDateTime(String),
+
+    #[error("Filter expression error: {0}")]
+    Expression(String),
 
     #[error("Unsupported platform")]
     UnsupportedPlatform,

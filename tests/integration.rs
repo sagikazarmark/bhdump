@@ -9,10 +9,9 @@ use bhdump::browsers::chromium;
 use bhdump::browsers::firefox;
 use bhdump::browsers::safari;
 use bhdump::browsers::{BrowserKind, BrowserSource, HistoryEntry};
-use bhdump::filter::FilterConfig;
-use bhdump::format::{write_entries, OutputFormat};
+use bhdump::filter::{FilterConfig, WhereExpr};
+use bhdump::format::{OutputFormat, write_entries};
 use chrono::{TimeZone, Utc};
-use regex::Regex;
 
 fn chrome_source() -> BrowserSource {
     BrowserSource {
@@ -364,7 +363,7 @@ fn make_test_entries() -> Vec<HistoryEntry> {
 fn filter_excludes_internal_urls_by_default() {
     let entries = make_test_entries();
     let filter = FilterConfig::default();
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert!(!result.iter().any(|e| e.url.starts_with("chrome://")));
     assert_eq!(result.len(), 4);
@@ -377,33 +376,33 @@ fn filter_includes_internal_urls_when_requested() {
         include_internal: true,
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert!(result.iter().any(|e| e.url.starts_with("chrome://")));
     assert_eq!(result.len(), 5);
 }
 
 #[test]
-fn filter_url_pattern() {
+fn filter_where_url_contains() {
     let entries = make_test_entries();
     let filter = FilterConfig {
-        url_pattern: Some(Regex::new(r"rust-lang").unwrap()),
+        where_expr: Some(WhereExpr::compile(r#"url.contains("rust-lang")"#).unwrap()),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].url, "https://rust-lang.org");
 }
 
 #[test]
-fn filter_url_exclude() {
+fn filter_where_url_exclude() {
     let entries = make_test_entries();
     let filter = FilterConfig {
-        url_exclude: Some(Regex::new(r"example\.com").unwrap()),
+        where_expr: Some(WhereExpr::compile(r#"!url.matches("example\\.com")"#).unwrap()),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     // Should only have rust-lang.org (chrome://settings is excluded as internal)
     assert_eq!(result.len(), 1);
@@ -411,39 +410,39 @@ fn filter_url_exclude() {
 }
 
 #[test]
-fn filter_domain() {
+fn filter_where_domain() {
     let entries = make_test_entries();
     let filter = FilterConfig {
-        domains: Some(vec!["example.com".to_string()]),
+        where_expr: Some(WhereExpr::compile(r#"domain == "example.com""#).unwrap()),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert_eq!(result.len(), 3); // page1 (Chrome), page2, page1 (Firefox)
     assert!(result.iter().all(|e| e.url.contains("example.com")));
 }
 
 #[test]
-fn filter_title_pattern() {
+fn filter_where_title() {
     let entries = make_test_entries();
     let filter = FilterConfig {
-        title_pattern: Some(Regex::new(r"(?i)rust").unwrap()),
+        where_expr: Some(WhereExpr::compile(r#"title.matches("(?i)rust")"#).unwrap()),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].url, "https://rust-lang.org");
 }
 
 #[test]
-fn filter_min_visit_count() {
+fn filter_where_min_visit_count() {
     let entries = make_test_entries();
     let filter = FilterConfig {
-        min_visit_count: Some(5),
+        where_expr: Some(WhereExpr::compile("visit_count >= 5").unwrap()),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     // example.com/page1 (5), rust-lang.org (20) -- but not chrome://settings or example.com/page2
     assert_eq!(result.len(), 2);
@@ -456,7 +455,7 @@ fn filter_limit() {
         limit: Some(2),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert_eq!(result.len(), 2);
 }
@@ -468,7 +467,7 @@ fn filter_deduplicate() {
         deduplicate: true,
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     // page1 appears twice (Chrome and Firefox), dedup keeps first (most recent)
     let page1_entries: Vec<&HistoryEntry> = result
@@ -483,13 +482,14 @@ fn filter_deduplicate() {
 fn filter_combined() {
     let entries = make_test_entries();
     let filter = FilterConfig {
-        url_pattern: Some(Regex::new(r"example\.com").unwrap()),
-        min_visit_count: Some(3),
+        where_expr: Some(
+            WhereExpr::compile(r#"url.matches("example\\.com") && visit_count >= 3"#).unwrap(),
+        ),
         deduplicate: true,
         limit: Some(10),
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     // example.com entries with visit_count >= 3: page1 (5, Chrome), page1 (3, Firefox)
     // After dedup: page1 (Chrome only, since it's more recent)
@@ -533,7 +533,7 @@ fn make_entries_with_noise() -> Vec<HistoryEntry> {
 fn filter_excludes_noise_by_default() {
     let entries = make_entries_with_noise();
     let filter = FilterConfig::default();
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert!(!result.iter().any(|e| e.url.contains("accounts.google.com")));
     assert!(!result.iter().any(|e| e.url.contains("t.co")));
@@ -549,7 +549,7 @@ fn filter_includes_noise_when_requested() {
         include_noise: true,
         ..Default::default()
     };
-    let result = filter.apply(entries);
+    let result = filter.apply(entries).unwrap();
 
     assert!(result.iter().any(|e| e.url.contains("accounts.google.com")));
     assert!(result.iter().any(|e| e.url.contains("t.co")));
@@ -566,7 +566,7 @@ fn filter_includes_noise_when_requested() {
 fn json_roundtrip() {
     let entries = make_test_entries();
     let filter = FilterConfig::default();
-    let filtered = filter.apply(entries);
+    let filtered = filter.apply(entries).unwrap();
 
     let mut buf = Vec::new();
     write_entries(&mut buf, &filtered, OutputFormat::Json).unwrap();
@@ -585,7 +585,7 @@ fn json_roundtrip() {
 fn jsonl_roundtrip() {
     let entries = make_test_entries();
     let filter = FilterConfig::default();
-    let filtered = filter.apply(entries);
+    let filtered = filter.apply(entries).unwrap();
 
     let mut buf = Vec::new();
     write_entries(&mut buf, &filtered, OutputFormat::JsonLines).unwrap();
@@ -609,7 +609,7 @@ fn jsonl_roundtrip() {
 fn csv_has_correct_structure() {
     let entries = make_test_entries();
     let filter = FilterConfig::default();
-    let filtered = filter.apply(entries);
+    let filtered = filter.apply(entries).unwrap();
 
     let mut buf = Vec::new();
     write_entries(&mut buf, &filtered, OutputFormat::Csv).unwrap();
@@ -704,7 +704,7 @@ fn full_pipeline_chromium_to_json() {
         limit: Some(2),
         ..Default::default()
     };
-    let filtered = filter.apply(entries);
+    let filtered = filter.apply(entries).unwrap();
     assert_eq!(filtered.len(), 2);
 
     // Step 3: Format as JSON
@@ -728,10 +728,13 @@ fn full_pipeline_firefox_to_csv() {
     let entries = firefox::read_history(&conn, &source, None, None, false).unwrap();
 
     let filter = FilterConfig {
-        domains: Some(vec!["mozilla.org".to_string()]),
+        where_expr: Some(
+            WhereExpr::compile(r#"domain == "mozilla.org" || domain.endsWith(".mozilla.org")"#)
+                .unwrap(),
+        ),
         ..Default::default()
     };
-    let filtered = filter.apply(entries);
+    let filtered = filter.apply(entries).unwrap();
 
     // mozilla.org and developer.mozilla.org should match
     assert_eq!(filtered.len(), 2);
@@ -758,7 +761,7 @@ fn full_pipeline_safari_to_jsonl() {
     let entries = safari::read_history(&conn, &source, None, None, true).unwrap();
 
     let filter = FilterConfig::default();
-    let filtered = filter.apply(entries);
+    let filtered = filter.apply(entries).unwrap();
 
     let mut buf = Vec::new();
     write_entries(&mut buf, &filtered, OutputFormat::JsonLines).unwrap();

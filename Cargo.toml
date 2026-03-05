@@ -14,11 +14,13 @@ name = "bhdump"
 path = "src/main.rs"
 
 [dependencies]
+cel-interpreter = { version = "0.10", features = ["chrono", "regex"] }
 chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
 csv = "1.4"
 dirs = "6.0"
-regex = "1.12"
+interim = { version = "0.2", features = ["chrono_0_4"] }
 rusqlite = { version = "0.38", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -28,7 +30,11 @@ tracing = "0.1"
 
 [dev-dependencies]
 csv = "1.4"
-regex = "1.12"
 rusqlite = { version = "0.38", features = ["bundled"] }
 serde_json = "1.0"
 tracing-subscriber = "0.3"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

@@ -18,7 +18,7 @@
 //!
 //! // Apply filters
 //! let filter = FilterConfig::default();
-//! let filtered = filter.apply(entries);
+//! let filtered = filter.apply(entries).unwrap();
 //!
 //! // Write to stdout as JSON
 //! let mut stdout = std::io::stdout().lock();
