@@ -42,3 +42,9 @@ tracing-subscriber = "0.3"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+[package.metadata.release]
+sign-commit = true
+sign-tag = true
+tag-message = "Release {{version}}"
+tag-prefix = ""
