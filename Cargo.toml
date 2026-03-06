@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 description = "Export browser history in JSON, CSV, and other formats"
 license = "MIT"
+repository = "https://github.com/sagikazarmark/bhdump"
+homepage = "https://github.com/sagikazarmark/bhdump"
+keywords = []
+categories = []
 
 [lib]
 name = "bhdump"
@@ -15,7 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 cel-interpreter = { version = "0.10", features = ["chrono", "regex"] }
-chrono = { version = "0.4.44", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 csv = "1.4"
