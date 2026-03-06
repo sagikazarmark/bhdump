@@ -237,7 +237,11 @@ impl FilterConfig {
             let desc = sort_key.descending;
             result.sort_by(|a, b| {
                 let ord = cmp_by_field(a, b, field);
-                if desc { ord.reverse() } else { ord }
+                if desc {
+                    ord.reverse()
+                } else {
+                    ord
+                }
             });
         }
 
@@ -373,7 +377,7 @@ fn deduplicate(entries: Vec<HistoryEntry>) -> Vec<HistoryEntry> {
 mod tests {
     use super::*;
     use crate::browsers::BrowserKind;
-    use chrono::{TimeZone, Utc};
+    use chrono::{DateTime, TimeZone, Utc};
 
     fn test_entry() -> HistoryEntry {
         HistoryEntry {
@@ -586,6 +590,521 @@ mod tests {
         let result = filter.apply(entries).unwrap();
         assert_eq!(result[0].url, "https://alpha.com");
         assert_eq!(result[1].url, "https://zebra.com");
+    }
+
+    // ------------------------------------------------------------------
+    // extract_host tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_host_https() {
+        assert_eq!(extract_host("https://example.com/path"), "example.com");
+    }
+
+    #[test]
+    fn test_extract_host_http() {
+        assert_eq!(extract_host("http://example.com/path"), "example.com");
+    }
+
+    #[test]
+    fn test_extract_host_with_port() {
+        assert_eq!(
+            extract_host("https://example.com:8080/path"),
+            "example.com:8080"
+        );
+    }
+
+    #[test]
+    fn test_extract_host_no_path() {
+        assert_eq!(extract_host("https://example.com"), "example.com");
+    }
+
+    #[test]
+    fn test_extract_host_trailing_slash() {
+        assert_eq!(extract_host("https://example.com/"), "example.com");
+    }
+
+    #[test]
+    fn test_extract_host_no_protocol() {
+        assert_eq!(extract_host("not-a-url"), "");
+    }
+
+    #[test]
+    fn test_extract_host_empty() {
+        assert_eq!(extract_host(""), "");
+    }
+
+    #[test]
+    fn test_extract_host_subdomain() {
+        assert_eq!(
+            extract_host("https://sub.domain.example.com/foo"),
+            "sub.domain.example.com"
+        );
+    }
+
+    #[test]
+    fn test_extract_host_with_query() {
+        assert_eq!(
+            extract_host("https://example.com/path?q=1&b=2"),
+            "example.com"
+        );
+    }
+
+    #[test]
+    fn test_extract_host_with_userinfo() {
+        // URLs with user:pass@ -- extract_host returns everything between :// and /
+        assert_eq!(
+            extract_host("https://user:pass@example.com/path"),
+            "user:pass@example.com"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // CEL visit_time tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_where_visit_time_comparison() {
+        let entry = test_entry(); // visit_time is 2024-01-15T10:00:00Z
+        let expr = WhereExpr::compile(r#"visit_time > timestamp("2024-01-01T00:00:00Z")"#).unwrap();
+        assert!(expr.matches(&entry).unwrap());
+
+        let expr = WhereExpr::compile(r#"visit_time > timestamp("2025-01-01T00:00:00Z")"#).unwrap();
+        assert!(!expr.matches(&entry).unwrap());
+    }
+
+    #[test]
+    fn test_where_visit_time_before() {
+        let entry = test_entry(); // visit_time is 2024-01-15T10:00:00Z
+        let expr = WhereExpr::compile(r#"visit_time < timestamp("2024-02-01T00:00:00Z")"#).unwrap();
+        assert!(expr.matches(&entry).unwrap());
+
+        let expr = WhereExpr::compile(r#"visit_time < timestamp("2024-01-01T00:00:00Z")"#).unwrap();
+        assert!(!expr.matches(&entry).unwrap());
+    }
+
+    // ------------------------------------------------------------------
+    // WhereExpr::references tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_where_references_single_variable() {
+        let expr = WhereExpr::compile(r#"url.contains("github")"#).unwrap();
+        let (vars, funcs) = expr.references();
+        assert!(vars.contains(&"url".to_string()));
+        assert!(funcs.contains(&"contains".to_string()));
+    }
+
+    #[test]
+    fn test_where_references_multiple_variables() {
+        let expr = WhereExpr::compile(r#"domain == "github.com" && visit_count > 5"#).unwrap();
+        let (vars, _funcs) = expr.references();
+        assert!(vars.contains(&"domain".to_string()));
+        assert!(vars.contains(&"visit_count".to_string()));
+    }
+
+    #[test]
+    fn test_where_references_operators_as_functions() {
+        // CEL treats operators like `>` as function references internally
+        let expr = WhereExpr::compile(r#"visit_count > 10"#).unwrap();
+        let (vars, funcs) = expr.references();
+        assert!(vars.contains(&"visit_count".to_string()));
+        assert!(funcs.contains(&"_>_".to_string()));
+    }
+
+    // ------------------------------------------------------------------
+    // SortField::Display tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_sort_field_display() {
+        assert_eq!(SortField::Url.to_string(), "url");
+        assert_eq!(SortField::Title.to_string(), "title");
+        assert_eq!(SortField::VisitTime.to_string(), "time");
+        assert_eq!(SortField::VisitCount.to_string(), "count");
+        assert_eq!(SortField::Browser.to_string(), "browser");
+        assert_eq!(SortField::Profile.to_string(), "profile");
+        assert_eq!(SortField::Domain.to_string(), "domain");
+    }
+
+    // ------------------------------------------------------------------
+    // Additional sort ordering tests (Title, VisitTime, Browser, Profile, Domain)
+    // ------------------------------------------------------------------
+
+    fn make_entry(
+        url: &str,
+        title: Option<&str>,
+        visit_time: DateTime<Utc>,
+        visit_count: Option<u64>,
+        browser: BrowserKind,
+        profile: &str,
+    ) -> HistoryEntry {
+        HistoryEntry {
+            url: url.to_string(),
+            title: title.map(String::from),
+            visit_time,
+            visit_count,
+            visit_duration_ms: None,
+            browser,
+            profile: profile.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_sort_by_title_ascending() {
+        let entries = vec![
+            make_entry(
+                "https://z.com",
+                Some("Zebra"),
+                Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://a.com",
+                Some("Alpha"),
+                Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::Title,
+                descending: false,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        assert_eq!(result[0].title.as_deref(), Some("Alpha"));
+        assert_eq!(result[1].title.as_deref(), Some("Zebra"));
+    }
+
+    #[test]
+    fn test_sort_by_title_with_none() {
+        let entries = vec![
+            make_entry(
+                "https://a.com",
+                Some("Beta"),
+                Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://b.com",
+                None,
+                Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::Title,
+                descending: false,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        // None title treated as "" which sorts before "Beta"
+        assert_eq!(result[0].title, None);
+        assert_eq!(result[1].title.as_deref(), Some("Beta"));
+    }
+
+    #[test]
+    fn test_sort_by_visit_time_ascending() {
+        let early = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap();
+        let late = Utc.with_ymd_and_hms(2024, 6, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://late.com",
+                None,
+                late,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://early.com",
+                None,
+                early,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::VisitTime,
+                descending: false,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        assert_eq!(result[0].url, "https://early.com");
+        assert_eq!(result[1].url, "https://late.com");
+    }
+
+    #[test]
+    fn test_sort_by_visit_time_descending() {
+        let early = Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap();
+        let late = Utc.with_ymd_and_hms(2024, 6, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://early.com",
+                None,
+                early,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://late.com",
+                None,
+                late,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::VisitTime,
+                descending: true,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        assert_eq!(result[0].url, "https://late.com");
+        assert_eq!(result[1].url, "https://early.com");
+    }
+
+    #[test]
+    fn test_sort_by_browser_ascending() {
+        let t = Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://a.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Safari,
+                "Default",
+            ),
+            make_entry(
+                "https://b.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://c.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Firefox,
+                "Default",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::Browser,
+                descending: false,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        // chrome < firefox < safari (lexicographic on as_str())
+        assert_eq!(result[0].browser, BrowserKind::Chrome);
+        assert_eq!(result[1].browser, BrowserKind::Firefox);
+        assert_eq!(result[2].browser, BrowserKind::Safari);
+    }
+
+    #[test]
+    fn test_sort_by_profile_ascending() {
+        let t = Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://a.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Work",
+            ),
+            make_entry(
+                "https://b.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://c.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Personal",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::Profile,
+                descending: false,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        assert_eq!(result[0].profile, "Default");
+        assert_eq!(result[1].profile, "Personal");
+        assert_eq!(result[2].profile, "Work");
+    }
+
+    #[test]
+    fn test_sort_by_domain_ascending() {
+        let t = Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://zebra.com/path",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://alpha.org/page",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://middle.net/docs",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let filter = FilterConfig {
+            sort: Some(SortKey {
+                field: SortField::Domain,
+                descending: false,
+            }),
+            ..Default::default()
+        };
+        let result = filter.apply(entries).unwrap();
+        assert_eq!(result[0].url, "https://alpha.org/page");
+        assert_eq!(result[1].url, "https://middle.net/docs");
+        assert_eq!(result[2].url, "https://zebra.com/path");
+    }
+
+    // ------------------------------------------------------------------
+    // Standalone deduplicate tests
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn test_deduplicate_keeps_first_occurrence() {
+        let entries = vec![
+            make_entry(
+                "https://example.com",
+                Some("First"),
+                Utc.with_ymd_and_hms(2024, 6, 1, 10, 0, 0).unwrap(),
+                Some(5),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://example.com",
+                Some("Second"),
+                Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap(),
+                Some(3),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let result = deduplicate(entries);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].title.as_deref(), Some("First"));
+    }
+
+    #[test]
+    fn test_deduplicate_different_urls_kept() {
+        let t = Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://a.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://b.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+        ];
+
+        let result = deduplicate(entries);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_deduplicate_same_url_different_browsers() {
+        let t = Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap();
+        let entries = vec![
+            make_entry(
+                "https://example.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Chrome,
+                "Default",
+            ),
+            make_entry(
+                "https://example.com",
+                None,
+                t,
+                Some(1),
+                BrowserKind::Firefox,
+                "default-release",
+            ),
+        ];
+
+        // Dedup is by URL only, so second entry is dropped regardless of browser
+        let result = deduplicate(entries);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].browser, BrowserKind::Chrome);
+    }
+
+    #[test]
+    fn test_deduplicate_empty() {
+        let result = deduplicate(Vec::new());
+        assert!(result.is_empty());
     }
 
     #[test]

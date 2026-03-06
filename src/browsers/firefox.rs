@@ -168,6 +168,38 @@ fn datetime_to_firefox(dt: DateTime<Utc>) -> i64 {
     dt.timestamp() * 1_000_000 + dt.timestamp_subsec_micros() as i64
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::timestamp;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn test_datetime_to_firefox_roundtrip() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let firefox_ts = datetime_to_firefox(dt);
+        let roundtripped = timestamp::from_firefox(firefox_ts).unwrap();
+        assert_eq!(roundtripped, dt);
+    }
+
+    #[test]
+    fn test_datetime_to_firefox_roundtrip_epoch() {
+        // Just after Unix epoch (from_firefox rejects 0)
+        let dt = Utc.with_ymd_and_hms(1970, 1, 1, 0, 0, 1).unwrap();
+        let firefox_ts = datetime_to_firefox(dt);
+        let roundtripped = timestamp::from_firefox(firefox_ts).unwrap();
+        assert_eq!(roundtripped, dt);
+    }
+
+    #[test]
+    fn test_datetime_to_firefox_known_value() {
+        // 2024-01-01T00:00:00Z -> microseconds since Unix epoch
+        let dt = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let firefox_ts = datetime_to_firefox(dt);
+        assert_eq!(firefox_ts, 1_704_067_200_000_000);
+    }
+}
+
 /// Get the profiles directory for a Firefox-family browser on the current platform.
 fn browser_profiles_dir(kind: BrowserKind) -> Option<PathBuf> {
     let home = dirs::home_dir()?;

@@ -212,6 +212,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_relative_months() {
+        let dt = parse_user_datetime("3mo").unwrap();
+        let now = Utc::now();
+        let diff = now - dt;
+        // 3 months ≈ 90 days (3 * 30)
+        assert!((diff.num_seconds() - 90 * 86400).abs() < 2);
+    }
+
+    #[test]
+    fn test_parse_relative_years() {
+        let dt = parse_user_datetime("1y").unwrap();
+        let now = Utc::now();
+        let diff = now - dt;
+        // 1 year ≈ 365 days
+        assert!((diff.num_seconds() - 365 * 86400).abs() < 2);
+    }
+
+    #[test]
+    fn test_parse_relative_hours() {
+        let dt = parse_user_datetime("12h").unwrap();
+        let now = Utc::now();
+        let diff = now - dt;
+        assert!((diff.num_seconds() - 12 * 3600).abs() < 2);
+    }
+
+    #[test]
     fn test_parse_invalid() {
         assert!(parse_user_datetime("not-a-date").is_err());
     }

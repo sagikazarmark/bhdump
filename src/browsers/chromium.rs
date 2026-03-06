@@ -176,6 +176,38 @@ fn datetime_to_webkit(dt: DateTime<Utc>) -> i64 {
     (unix_seconds + 11_644_473_600) * 1_000_000 + sub_micros
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::timestamp;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn test_datetime_to_webkit_roundtrip() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let webkit_ts = datetime_to_webkit(dt);
+        let roundtripped = timestamp::from_webkit(webkit_ts).unwrap();
+        assert_eq!(roundtripped, dt);
+    }
+
+    #[test]
+    fn test_datetime_to_webkit_roundtrip_epoch() {
+        // Unix epoch
+        let dt = Utc.with_ymd_and_hms(1970, 1, 1, 0, 0, 0).unwrap();
+        let webkit_ts = datetime_to_webkit(dt);
+        let roundtripped = timestamp::from_webkit(webkit_ts).unwrap();
+        assert_eq!(roundtripped, dt);
+    }
+
+    #[test]
+    fn test_datetime_to_webkit_known_value() {
+        // 2024-01-01T00:00:00Z should produce the known WebKit timestamp
+        let dt = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let webkit_ts = datetime_to_webkit(dt);
+        assert_eq!(webkit_ts, 13_348_540_800_000_000);
+    }
+}
+
 /// Get the base data directory for a Chromium-based browser on the current platform.
 fn browser_data_dir(kind: BrowserKind) -> Option<PathBuf> {
     let home = dirs::home_dir()?;

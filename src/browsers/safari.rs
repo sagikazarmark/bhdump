@@ -159,3 +159,35 @@ fn read_individual_visits(
 fn datetime_to_safari(dt: DateTime<Utc>) -> f64 {
     (dt.timestamp() - 978_307_200) as f64 + (dt.timestamp_subsec_nanos() as f64 / 1_000_000_000.0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::timestamp;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn test_datetime_to_safari_roundtrip() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let safari_ts = datetime_to_safari(dt);
+        let roundtripped = timestamp::from_safari(safari_ts).unwrap();
+        assert_eq!(roundtripped, dt);
+    }
+
+    #[test]
+    fn test_datetime_to_safari_known_value() {
+        // 2024-01-01T00:00:00Z -> seconds since 2001-01-01
+        let dt = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let safari_ts = datetime_to_safari(dt);
+        assert!((safari_ts - 725_760_000.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_datetime_to_safari_roundtrip_core_data_epoch() {
+        // 2001-01-01T00:00:01Z (just after Core Data epoch, since 0 is rejected)
+        let dt = Utc.with_ymd_and_hms(2001, 1, 1, 0, 0, 1).unwrap();
+        let safari_ts = datetime_to_safari(dt);
+        let roundtripped = timestamp::from_safari(safari_ts).unwrap();
+        assert_eq!(roundtripped, dt);
+    }
+}
