@@ -55,8 +55,8 @@ pub fn from_safari(seconds: f64) -> Option<DateTime<Utc>> {
 /// 2. **Compact shorthands** — `7d`, `2w`, `3mo`, `1y`, `1h` (subtracted
 ///    from now).
 /// 3. **Natural language** via [`interim`] — handles `"last friday"`,
-///    `"3 days ago"`, `"next april"`, `"friday 8pm"`, ISO 8601, and
-///    month-name dates like `"April 1, 2024"`.
+///    `"3 days ago"`, `"friday 8pm"`, ISO 8601, and month-name dates
+///    like `"April 1, 2024"`.
 pub fn parse_user_datetime(input: &str) -> crate::error::Result<DateTime<Utc>> {
     let input = input.trim();
 

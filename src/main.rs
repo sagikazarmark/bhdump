@@ -208,7 +208,6 @@ const FILTER_HELP: &str = "\
     bhdump \"last friday\"       last Friday
     bhdump \"3 days ago\"        3 days ago
     bhdump \"2 hours ago\"       2 hours ago
-    bhdump \"next april\"        April 1 of next year (if April has passed)
 
   \x1b[1mAbsolute dates:\x1b[0m
 
