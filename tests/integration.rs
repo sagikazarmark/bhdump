@@ -1076,3 +1076,319 @@ fn wal_data_readable_through_read_history_safari() {
     // visit_count is COUNT(visits), not the value from history_items
     assert_eq!(entries[0].visit_count, Some(1));
 }
+
+// ---------------------------------------------------------------------------
+// read_all() multi-source merging tests
+// ---------------------------------------------------------------------------
+
+/// Helper: create an on-disk Chromium database (journal mode = delete, not WAL)
+/// with the given entries.
+fn create_disk_chromium_db(
+    dir: &std::path::Path,
+    db_name: &str,
+    entries: &[(&str, &str, i64)], // (url, title, last_visit_time as WebKit timestamp)
+) {
+    let db_path = dir.join(db_name);
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+
+    conn.execute_batch(
+        "CREATE TABLE urls (
+            id INTEGER PRIMARY KEY,
+            url TEXT,
+            title TEXT,
+            visit_count INTEGER DEFAULT 0,
+            typed_count INTEGER DEFAULT 0,
+            last_visit_time INTEGER DEFAULT 0,
+            hidden INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE visits (
+            id INTEGER PRIMARY KEY,
+            url INTEGER NOT NULL,
+            visit_time INTEGER NOT NULL,
+            from_visit INTEGER DEFAULT 0,
+            transition INTEGER DEFAULT 0,
+            segment_id INTEGER DEFAULT 0,
+            visit_duration INTEGER DEFAULT 0
+        );",
+    )
+    .unwrap();
+
+    for (i, (url, title, ts)) in entries.iter().enumerate() {
+        let id = (i + 1) as i64;
+        conn.execute(
+            "INSERT INTO urls (id, url, title, visit_count, last_visit_time, hidden)
+             VALUES (?1, ?2, ?3, 1, ?4, 0)",
+            rusqlite::params![id, url, title, ts],
+        )
+        .unwrap();
+    }
+}
+
+/// Helper: create an on-disk Firefox database with the given entries.
+fn create_disk_firefox_db(
+    dir: &std::path::Path,
+    db_name: &str,
+    entries: &[(&str, &str, i64)], // (url, title, visit_date as Firefox timestamp)
+) {
+    let db_path = dir.join(db_name);
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+
+    conn.execute_batch(
+        "CREATE TABLE moz_places (
+            id INTEGER PRIMARY KEY,
+            url TEXT,
+            title TEXT,
+            rev_host TEXT,
+            visit_count INTEGER DEFAULT 0,
+            hidden INTEGER DEFAULT 0,
+            typed INTEGER DEFAULT 0,
+            frecency INTEGER DEFAULT -1,
+            last_visit_date INTEGER,
+            url_hash INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE moz_historyvisits (
+            id INTEGER PRIMARY KEY,
+            from_visit INTEGER DEFAULT 0,
+            place_id INTEGER NOT NULL,
+            visit_date INTEGER,
+            visit_type INTEGER DEFAULT 0,
+            session INTEGER DEFAULT 0
+        );",
+    )
+    .unwrap();
+
+    for (i, (url, title, ts)) in entries.iter().enumerate() {
+        let id = (i + 1) as i64;
+        conn.execute(
+            "INSERT INTO moz_places (id, url, title, visit_count, hidden, last_visit_date)
+             VALUES (?1, ?2, ?3, 1, 0, ?4)",
+            rusqlite::params![id, url, title, ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO moz_historyvisits (id, place_id, visit_date, visit_type)
+             VALUES (?1, ?2, ?3, 1)",
+            rusqlite::params![id, id, ts],
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn read_all_merges_multiple_sources_sorted_by_visit_time_desc() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Chrome source: entries at Jan 15 and Jan 13
+    // WebKit timestamps: unix + 11644473600 seconds, then * 1_000_000
+    // 2024-01-15T10:00:00Z => 13349786400000000
+    // 2024-01-13T12:00:00Z => 13349620800000000
+    create_disk_chromium_db(
+        dir.path(),
+        "History",
+        &[
+            (
+                "https://chrome-page.example.com",
+                "Chrome Page",
+                13349786400000000,
+            ),
+            (
+                "https://chrome-old.example.com",
+                "Chrome Old",
+                13349620800000000,
+            ),
+        ],
+    );
+
+    // Firefox source in a subdirectory (separate DB)
+    let ff_dir = dir.path().join("firefox");
+    std::fs::create_dir(&ff_dir).unwrap();
+
+    // Firefox timestamps: microseconds since Unix epoch
+    // 2024-01-14T08:00:00Z => 1705219200000000
+    create_disk_firefox_db(
+        &ff_dir,
+        "places.sqlite",
+        &[(
+            "https://firefox-page.example.com",
+            "Firefox Page",
+            1705219200000000,
+        )],
+    );
+
+    let sources = vec![
+        BrowserSource {
+            browser: BrowserKind::Chrome,
+            profile: "Default".to_string(),
+            db_path: dir.path().join("History"),
+        },
+        BrowserSource {
+            browser: BrowserKind::Firefox,
+            profile: "test-profile".to_string(),
+            db_path: ff_dir.join("places.sqlite"),
+        },
+    ];
+
+    let (entries, errors) = bhdump::browsers::read_all(&sources, None, None, false);
+
+    assert!(errors.is_empty(), "expected no errors, got: {errors:?}");
+    assert_eq!(entries.len(), 3);
+
+    // Verify sorted by visit_time descending
+    assert_eq!(entries[0].url, "https://chrome-page.example.com"); // Jan 15
+    assert_eq!(entries[1].url, "https://firefox-page.example.com"); // Jan 14
+    assert_eq!(entries[2].url, "https://chrome-old.example.com"); // Jan 13
+
+    // Verify browser tags are correct
+    assert_eq!(entries[0].browser, BrowserKind::Chrome);
+    assert_eq!(entries[1].browser, BrowserKind::Firefox);
+    assert_eq!(entries[2].browser, BrowserKind::Chrome);
+
+    // Verify profiles are correct
+    assert_eq!(entries[0].profile, "Default");
+    assert_eq!(entries[1].profile, "test-profile");
+    assert_eq!(entries[2].profile, "Default");
+
+    // Verify strict descending order
+    for window in entries.windows(2) {
+        assert!(window[0].visit_time >= window[1].visit_time);
+    }
+}
+
+#[test]
+fn read_all_continues_past_failing_source() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Create a valid Chromium database
+    create_disk_chromium_db(
+        dir.path(),
+        "History",
+        &[(
+            "https://good-source.example.com",
+            "Good Source",
+            13349786400000000,
+        )],
+    );
+
+    let sources = vec![
+        // Valid source
+        BrowserSource {
+            browser: BrowserKind::Chrome,
+            profile: "Default".to_string(),
+            db_path: dir.path().join("History"),
+        },
+        // Invalid source: DB file doesn't exist
+        BrowserSource {
+            browser: BrowserKind::Firefox,
+            profile: "missing".to_string(),
+            db_path: dir.path().join("nonexistent.sqlite"),
+        },
+    ];
+
+    let (entries, errors) = bhdump::browsers::read_all(&sources, None, None, false);
+
+    // The valid source should have produced entries
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].url, "https://good-source.example.com");
+    assert_eq!(entries[0].browser, BrowserKind::Chrome);
+
+    // The invalid source should have produced an error
+    assert_eq!(errors.len(), 1);
+}
+
+#[test]
+fn read_all_empty_sources_returns_empty() {
+    let sources: Vec<BrowserSource> = vec![];
+
+    let (entries, errors) = bhdump::browsers::read_all(&sources, None, None, false);
+
+    assert!(entries.is_empty());
+    assert!(errors.is_empty());
+}
+
+#[test]
+fn read_all_single_source() {
+    let dir = tempfile::tempdir().unwrap();
+
+    create_disk_chromium_db(
+        dir.path(),
+        "History",
+        &[
+            ("https://page-a.example.com", "Page A", 13349786400000000),
+            ("https://page-b.example.com", "Page B", 13349692800000000),
+        ],
+    );
+
+    let sources = vec![BrowserSource {
+        browser: BrowserKind::Chrome,
+        profile: "Default".to_string(),
+        db_path: dir.path().join("History"),
+    }];
+
+    let (entries, errors) = bhdump::browsers::read_all(&sources, None, None, false);
+
+    assert!(errors.is_empty());
+    assert_eq!(entries.len(), 2);
+
+    // Should still be sorted descending
+    assert!(entries[0].visit_time >= entries[1].visit_time);
+}
+
+#[test]
+fn read_all_all_sources_fail() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let sources = vec![
+        BrowserSource {
+            browser: BrowserKind::Chrome,
+            profile: "missing1".to_string(),
+            db_path: dir.path().join("nonexistent1.sqlite"),
+        },
+        BrowserSource {
+            browser: BrowserKind::Firefox,
+            profile: "missing2".to_string(),
+            db_path: dir.path().join("nonexistent2.sqlite"),
+        },
+    ];
+
+    let (entries, errors) = bhdump::browsers::read_all(&sources, None, None, false);
+
+    assert!(entries.is_empty());
+    assert_eq!(errors.len(), 2);
+}
+
+#[test]
+fn read_all_respects_since_and_before_filters() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // 2024-01-15T10:00:00Z => 13349786400000000 (WebKit)
+    // 2024-01-13T12:00:00Z => 13349620800000000 (WebKit)
+    // 2024-01-11T06:00:00Z => 13349425200000000 (WebKit) -- intentionally outside range
+    create_disk_chromium_db(
+        dir.path(),
+        "History",
+        &[
+            ("https://new.example.com", "New", 13349786400000000),
+            ("https://mid.example.com", "Mid", 13349620800000000),
+            ("https://old.example.com", "Old", 13349425200000000),
+        ],
+    );
+
+    let sources = vec![BrowserSource {
+        browser: BrowserKind::Chrome,
+        profile: "Default".to_string(),
+        db_path: dir.path().join("History"),
+    }];
+
+    // Only entries between Jan 13 00:00 and Jan 15 00:00
+    let since = Utc.with_ymd_and_hms(2024, 1, 13, 0, 0, 0).unwrap();
+    let before = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+
+    let (entries, errors) = bhdump::browsers::read_all(&sources, Some(since), Some(before), false);
+
+    assert!(errors.is_empty());
+    // Only "mid" (Jan 13 12:00) falls in this range
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].url, "https://mid.example.com");
+}

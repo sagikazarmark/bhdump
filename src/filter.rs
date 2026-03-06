@@ -237,11 +237,7 @@ impl FilterConfig {
             let desc = sort_key.descending;
             result.sort_by(|a, b| {
                 let ord = cmp_by_field(a, b, field);
-                if desc {
-                    ord.reverse()
-                } else {
-                    ord
-                }
+                if desc { ord.reverse() } else { ord }
             });
         }
 
