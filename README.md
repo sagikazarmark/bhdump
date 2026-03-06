@@ -148,6 +148,52 @@ let mut stdout = std::io::stdout().lock();
 write_entries(&mut stdout, &filtered, OutputFormat::Json).unwrap();
 ```
 
+## Comparison with similar tools
+
+Several tools exist for extracting and querying browser history from the command line.
+The table below compares the ones that are most similar in purpose to bhdump.
+
+| | [bhdump] | [browser-history] | [bhgrep] |
+|---|---|---|---|
+| **Language** | Rust | Python | Rust |
+| **Primary use case** | Export & filter | Export & library | Interactive search |
+| **Browsers** | 11 | 14 | 4 |
+| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS, Linux |
+| **Output formats** | JSON, JSONL, CSV, TSV | JSON, CSV | JSON, plain text, URL-only |
+| **Filter expressions** | CEL (`--where`) | - | Fuzzy, regex |
+| **Natural language dates** | Yes (`today`, `7d`, `"last friday"`) | - | - |
+| **Noise filtering** | Yes (auth, tracking, CDN) | - | - |
+| **Safe reads (temp copy)** | Yes | - | - |
+| **Interactive TUI** | - | - | Yes |
+| **Bookmarks** | - | Yes | - |
+| **Library usage** | Yes (Rust crate) | Yes (Python package) | - |
+| **Individual visits** | Yes (`--visits`) | - | - |
+
+[bhdump]: https://github.com/sagikazarmark/bhdump
+[browser-history]: https://github.com/browser-history/browser-history
+[bhgrep]: https://github.com/jondot/bhgrep
+
+### When to use what
+
+**bhdump** is designed for data export and pipeline use. If you need structured output with fine-grained filtering
+(e.g. piping history into `jq`, loading into a database, or feeding into analysis scripts), bhdump is the best fit.
+Its CEL expressions, noise filtering, and multiple output formats are built for this workflow.
+
+**browser-history** is a good choice if you work in Python and want a lightweight library to integrate into your own scripts.
+It also supports bookmark extraction, which bhdump does not. However, it lacks filtering, noise removal,
+and only outputs basic JSON or CSV.
+
+**bhgrep** is the right tool when you want to interactively search and browse your history from the terminal.
+Its fuzzy matching, TUI, and clipboard integration make it a quick "where did I see that page?" tool
+rather than a data export tool. It supports fewer browsers and has no structured export pipeline.
+
+### Other tools
+
+[**browser-gopher**](https://github.com/iansinnott/browser-gopher) (Go) takes a different approach:
+it imports your history into its own SQLite database with a full-text index, then lets you search over the aggregated data.
+This is useful if you want a persistent, searchable archive of your browsing history over time,
+but it requires a separate `populate` step and is macOS-focused.
+
 ## License
 
 The project is licensed under the [MIT License](LICENSE).
