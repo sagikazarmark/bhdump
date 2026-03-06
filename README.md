@@ -108,7 +108,7 @@ The `--where` flag accepts [CEL](https://cel-spec.dev) expressions evaluated aga
 | `url` | string | Full URL |
 | `domain` | string | Hostname extracted from the URL |
 | `title` | string | Page title (empty string if absent) |
-| `visit_count` | int | Aggregate visit count |
+| `visit_count` | uint | Aggregate visit count |
 | `browser` | string | Browser name (chrome, firefox, safari, ...) |
 | `profile` | string | Profile name |
 | `visit_time` | timestamp | When the page was visited |
@@ -125,7 +125,7 @@ A positional argument serves as shorthand for `--since`:
 |---|---|
 | Keywords | `today`, `yesterday` |
 | Compact | `7d`, `2w`, `3mo`, `1y`, `12h` |
-| Named ranges | `last-week`, `last-month`, `last-year` |
+| Relative keywords | `last-week` (7d), `last-month` (30d), `last-year` (365d) |
 | Natural language | `"last friday"`, `"3 days ago"` |
 | ISO 8601 | `2024-01-15`, `2024-01-15T10:30:00Z` |
 
