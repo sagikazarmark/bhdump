@@ -153,25 +153,28 @@ write_entries(&mut stdout, &filtered, OutputFormat::Json).unwrap();
 Several tools exist for extracting and querying browser history from the command line.
 The table below compares the ones that are most similar in purpose to bhdump.
 
-| | [bhdump] | [browser-history] | [bhgrep] |
-|---|---|---|---|
-| **Language** | Rust | Python | Rust |
-| **Primary use case** | Export & filter | Export & library | Interactive search |
-| **Browsers** | 11 | 14 | 4 |
-| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS, Linux |
-| **Output formats** | JSON, JSONL, CSV, TSV | JSON, CSV | JSON, plain text, URL-only |
-| **Filter expressions** | CEL (`--where`) | - | Fuzzy, regex |
-| **Natural language dates** | Yes (`today`, `7d`, `"last friday"`) | - | - |
-| **Noise filtering** | Yes (auth, tracking, CDN) | - | - |
-| **Safe reads (temp copy)** | Yes | - | - |
-| **Interactive TUI** | - | - | Yes |
-| **Bookmarks** | - | Yes | - |
-| **Library usage** | Yes (Rust crate) | Yes (Python package) | - |
-| **Individual visits** | Yes (`--visits`) | - | - |
+| | [bhdump] | [browser-history] | [bhgrep] | [1History] | [web-recap] |
+|---|---|---|---|---|---|
+| **Language** | Rust | Python | Rust | Rust | Go |
+| **Primary use case** | Export & filter | Export & library | Interactive search | Backup & visualize | Export (LLM-focused) |
+| **Browsers** | 11 | 14 | 4 | 3 | 6 |
+| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS, Linux | macOS, Linux, Windows | macOS, Linux, Windows |
+| **Output formats** | JSON, JSONL, CSV, TSV | JSON, CSV | JSON, plain text, URL-only | CSV | JSON |
+| **Filter expressions** | CEL (`--where`) | - | Fuzzy, regex | - | - |
+| **Natural language dates** | Yes (`today`, `7d`, `"last friday"`) | - | - | - | - |
+| **Noise filtering** | Yes (auth, tracking, CDN) | - | - | - | - |
+| **Safe reads (temp copy)** | Yes | - | - | - | Yes |
+| **Interactive TUI** | - | - | Yes | - | - |
+| **Web dashboard** | - | - | - | Yes | - |
+| **Bookmarks** | - | Yes | - | - | - |
+| **Library usage** | Yes (Rust crate) | Yes (Python package) | - | - | - |
+| **Individual visits** | Yes (`--visits`) | - | - | - | - |
 
 [bhdump]: https://github.com/sagikazarmark/bhdump
 [browser-history]: https://github.com/browser-history/browser-history
 [bhgrep]: https://github.com/jondot/bhgrep
+[1History]: https://github.com/localfirstapp/1History
+[web-recap]: https://github.com/robzolkos/web-recap
 
 ### When to use what
 
@@ -186,6 +189,16 @@ and only outputs basic JSON or CSV.
 **bhgrep** is the right tool when you want to interactively search and browse your history from the terminal.
 Its fuzzy matching, TUI, and clipboard integration make it a quick "where did I see that page?" tool
 rather than a data export tool. It supports fewer browsers and has no structured export pipeline.
+
+**1History** focuses on backing up browser history into a single SQLite database and visualizing it
+through a built-in web dashboard. If you want to maintain a persistent, deduplicated archive of your
+browsing history with visual analytics (top domains, daily page views), 1History is a good fit.
+It supports fewer browsers and output formats than bhdump, and has no filtering or pipeline features.
+
+**web-recap** is a lightweight Go tool designed to extract browser history as JSON for feeding into LLMs.
+If your primary goal is piping history into an AI assistant for summarization or analysis, web-recap
+is purpose-built for that. It supports fewer browsers and output formats than bhdump, and has no
+filtering, sorting, or deduplication features.
 
 ### Other tools
 
