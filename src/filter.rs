@@ -372,7 +372,7 @@ fn deduplicate(entries: Vec<HistoryEntry>) -> Vec<HistoryEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browsers::BrowserKind;
+    use crate::browsers::Browser;
     use chrono::{DateTime, TimeZone, Utc};
 
     fn test_entry() -> HistoryEntry {
@@ -382,7 +382,7 @@ mod tests {
             visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
             visit_count: Some(42),
             visit_duration_ms: None,
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "Default".to_string(),
         }
     }
@@ -562,7 +562,7 @@ mod tests {
                 visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
                 visit_count: Some(1),
                 visit_duration_ms: None,
-                browser: BrowserKind::Chrome,
+                browser: Browser::Chrome,
                 profile: "Default".to_string(),
             },
             HistoryEntry {
@@ -571,7 +571,7 @@ mod tests {
                 visit_time: Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
                 visit_count: Some(1),
                 visit_duration_ms: None,
-                browser: BrowserKind::Chrome,
+                browser: Browser::Chrome,
                 profile: "Default".to_string(),
             },
         ];
@@ -732,7 +732,7 @@ mod tests {
         title: Option<&str>,
         visit_time: DateTime<Utc>,
         visit_count: Option<u64>,
-        browser: BrowserKind,
+        browser: Browser,
         profile: &str,
     ) -> HistoryEntry {
         HistoryEntry {
@@ -754,7 +754,7 @@ mod tests {
                 Some("Zebra"),
                 Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -762,7 +762,7 @@ mod tests {
                 Some("Alpha"),
                 Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -787,7 +787,7 @@ mod tests {
                 Some("Beta"),
                 Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -795,7 +795,7 @@ mod tests {
                 None,
                 Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -823,7 +823,7 @@ mod tests {
                 None,
                 late,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -831,7 +831,7 @@ mod tests {
                 None,
                 early,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -858,7 +858,7 @@ mod tests {
                 None,
                 early,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -866,7 +866,7 @@ mod tests {
                 None,
                 late,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -892,7 +892,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Safari,
+                Browser::Safari,
                 "Default",
             ),
             make_entry(
@@ -900,7 +900,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -908,7 +908,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Firefox,
+                Browser::Firefox,
                 "Default",
             ),
         ];
@@ -922,29 +922,22 @@ mod tests {
         };
         let result = filter.apply(entries).unwrap();
         // chrome < firefox < safari (lexicographic on as_str())
-        assert_eq!(result[0].browser, BrowserKind::Chrome);
-        assert_eq!(result[1].browser, BrowserKind::Firefox);
-        assert_eq!(result[2].browser, BrowserKind::Safari);
+        assert_eq!(result[0].browser, Browser::Chrome);
+        assert_eq!(result[1].browser, Browser::Firefox);
+        assert_eq!(result[2].browser, Browser::Safari);
     }
 
     #[test]
     fn test_sort_by_profile_ascending() {
         let t = Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap();
         let entries = vec![
-            make_entry(
-                "https://a.com",
-                None,
-                t,
-                Some(1),
-                BrowserKind::Chrome,
-                "Work",
-            ),
+            make_entry("https://a.com", None, t, Some(1), Browser::Chrome, "Work"),
             make_entry(
                 "https://b.com",
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -952,7 +945,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Personal",
             ),
         ];
@@ -979,7 +972,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -987,7 +980,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -995,7 +988,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -1025,7 +1018,7 @@ mod tests {
                 Some("First"),
                 Utc.with_ymd_and_hms(2024, 6, 1, 10, 0, 0).unwrap(),
                 Some(5),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -1033,7 +1026,7 @@ mod tests {
                 Some("Second"),
                 Utc.with_ymd_and_hms(2024, 1, 1, 10, 0, 0).unwrap(),
                 Some(3),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -1052,7 +1045,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -1060,7 +1053,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
         ];
@@ -1078,7 +1071,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Chrome,
+                Browser::Chrome,
                 "Default",
             ),
             make_entry(
@@ -1086,7 +1079,7 @@ mod tests {
                 None,
                 t,
                 Some(1),
-                BrowserKind::Firefox,
+                Browser::Firefox,
                 "default-release",
             ),
         ];
@@ -1094,7 +1087,7 @@ mod tests {
         // Dedup is by URL only, so second entry is dropped regardless of browser
         let result = deduplicate(entries);
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].browser, BrowserKind::Chrome);
+        assert_eq!(result[0].browser, Browser::Chrome);
     }
 
     #[test]
@@ -1112,7 +1105,7 @@ mod tests {
                 visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
                 visit_count: Some(2),
                 visit_duration_ms: None,
-                browser: BrowserKind::Chrome,
+                browser: Browser::Chrome,
                 profile: "Default".to_string(),
             },
             HistoryEntry {
@@ -1121,7 +1114,7 @@ mod tests {
                 visit_time: Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
                 visit_count: Some(100),
                 visit_duration_ms: None,
-                browser: BrowserKind::Chrome,
+                browser: Browser::Chrome,
                 profile: "Default".to_string(),
             },
         ];

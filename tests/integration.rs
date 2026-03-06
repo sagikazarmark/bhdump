@@ -8,14 +8,14 @@ mod fixtures;
 use bhdump::browsers::chromium;
 use bhdump::browsers::firefox;
 use bhdump::browsers::safari;
-use bhdump::browsers::{BrowserKind, BrowserSource, HistoryEntry};
+use bhdump::browsers::{Browser, BrowserSource, HistoryEntry};
 use bhdump::filter::{FilterConfig, WhereExpr};
 use bhdump::format::{OutputFormat, write_entries};
 use chrono::{TimeZone, Utc};
 
 fn chrome_source() -> BrowserSource {
     BrowserSource {
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "Default".to_string(),
         db_path: "test-fixture".into(), // not used -- we pass conn directly
     }
@@ -23,7 +23,7 @@ fn chrome_source() -> BrowserSource {
 
 fn firefox_source() -> BrowserSource {
     BrowserSource {
-        browser: BrowserKind::Firefox,
+        browser: Browser::Firefox,
         profile: "test-profile".to_string(),
         db_path: "test-fixture".into(),
     }
@@ -31,7 +31,7 @@ fn firefox_source() -> BrowserSource {
 
 fn safari_source() -> BrowserSource {
     BrowserSource {
-        browser: BrowserKind::Safari,
+        browser: Browser::Safari,
         profile: "default".to_string(),
         db_path: "test-fixture".into(),
     }
@@ -54,7 +54,7 @@ fn chromium_aggregated_reads_all_visible_entries() {
 
     // Check they're tagged correctly
     for entry in &entries {
-        assert_eq!(entry.browser, BrowserKind::Chrome);
+        assert_eq!(entry.browser, Browser::Chrome);
         assert_eq!(entry.profile, "Default");
     }
 
@@ -172,7 +172,7 @@ fn firefox_aggregated_reads_all_visible_entries() {
     assert_eq!(entries.len(), 3);
 
     for entry in &entries {
-        assert_eq!(entry.browser, BrowserKind::Firefox);
+        assert_eq!(entry.browser, Browser::Firefox);
         assert_eq!(entry.profile, "test-profile");
     }
 
@@ -238,7 +238,7 @@ fn safari_aggregated_reads_all_entries() {
     assert_eq!(entries.len(), 3);
 
     for entry in &entries {
-        assert_eq!(entry.browser, BrowserKind::Safari);
+        assert_eq!(entry.browser, Browser::Safari);
         assert_eq!(entry.profile, "default");
     }
 
@@ -317,7 +317,7 @@ fn make_test_entries() -> Vec<HistoryEntry> {
             visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
             visit_count: Some(5),
             visit_duration_ms: None,
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "Default".to_string(),
         },
         HistoryEntry {
@@ -326,7 +326,7 @@ fn make_test_entries() -> Vec<HistoryEntry> {
             visit_time: Utc.with_ymd_and_hms(2024, 1, 14, 10, 0, 0).unwrap(),
             visit_count: Some(2),
             visit_duration_ms: None,
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "Default".to_string(),
         },
         HistoryEntry {
@@ -335,7 +335,7 @@ fn make_test_entries() -> Vec<HistoryEntry> {
             visit_time: Utc.with_ymd_and_hms(2024, 1, 13, 10, 0, 0).unwrap(),
             visit_count: Some(20),
             visit_duration_ms: None,
-            browser: BrowserKind::Firefox,
+            browser: Browser::Firefox,
             profile: "test-profile".to_string(),
         },
         HistoryEntry {
@@ -344,7 +344,7 @@ fn make_test_entries() -> Vec<HistoryEntry> {
             visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
             visit_count: Some(1),
             visit_duration_ms: None,
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "Default".to_string(),
         },
         HistoryEntry {
@@ -353,7 +353,7 @@ fn make_test_entries() -> Vec<HistoryEntry> {
             visit_time: Utc.with_ymd_and_hms(2024, 1, 12, 10, 0, 0).unwrap(),
             visit_count: Some(3),
             visit_duration_ms: None,
-            browser: BrowserKind::Firefox,
+            browser: Browser::Firefox,
             profile: "test-profile".to_string(),
         },
     ]
@@ -475,7 +475,7 @@ fn filter_deduplicate() {
         .filter(|e| e.url == "https://example.com/page1")
         .collect();
     assert_eq!(page1_entries.len(), 1);
-    assert_eq!(page1_entries[0].browser, BrowserKind::Chrome); // Chrome entry is more recent
+    assert_eq!(page1_entries[0].browser, Browser::Chrome); // Chrome entry is more recent
 }
 
 #[test]
@@ -505,7 +505,7 @@ fn make_entries_with_noise() -> Vec<HistoryEntry> {
         visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 9, 0, 0).unwrap(),
         visit_count: Some(50),
         visit_duration_ms: None,
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "Default".to_string(),
     });
     entries.push(HistoryEntry {
@@ -514,7 +514,7 @@ fn make_entries_with_noise() -> Vec<HistoryEntry> {
         visit_time: Utc.with_ymd_and_hms(2024, 1, 14, 12, 0, 0).unwrap(),
         visit_count: Some(1),
         visit_duration_ms: None,
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "Default".to_string(),
     });
     entries.push(HistoryEntry {
@@ -523,7 +523,7 @@ fn make_entries_with_noise() -> Vec<HistoryEntry> {
         visit_time: Utc.with_ymd_and_hms(2024, 1, 13, 8, 0, 0).unwrap(),
         visit_count: Some(5),
         visit_duration_ms: None,
-        browser: BrowserKind::Firefox,
+        browser: Browser::Firefox,
         profile: "test-profile".to_string(),
     });
     entries
@@ -647,7 +647,7 @@ fn tsv_uses_tabs() {
         visit_time: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
         visit_count: Some(1),
         visit_duration_ms: None,
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "Default".to_string(),
     }];
 
@@ -715,7 +715,7 @@ fn full_pipeline_chromium_to_json() {
     // Step 4: Parse back and verify
     let parsed: Vec<HistoryEntry> = serde_json::from_str(&output).unwrap();
     assert_eq!(parsed.len(), 2);
-    assert_eq!(parsed[0].browser, BrowserKind::Chrome);
+    assert_eq!(parsed[0].browser, Browser::Chrome);
     assert_eq!(parsed[0].profile, "Default");
     assert!(parsed[0].visit_time > parsed[1].visit_time); // descending order
 }
@@ -775,18 +775,18 @@ fn full_pipeline_safari_to_jsonl() {
 
     assert_eq!(parsed.len(), filtered.len());
     for entry in &parsed {
-        assert_eq!(entry.browser, BrowserKind::Safari);
+        assert_eq!(entry.browser, Browser::Safari);
         assert_eq!(entry.profile, "default");
     }
 }
 
 // ---------------------------------------------------------------------------
-// BrowserKind serialization/deserialization tests
+// Browser serialization/deserialization tests
 // ---------------------------------------------------------------------------
 
 #[test]
 fn browser_kind_serde_roundtrip() {
-    for &kind in BrowserKind::ALL {
+    for &kind in Browser::ALL {
         let entry = HistoryEntry {
             url: "https://example.com".to_string(),
             title: Some("Test".to_string()),
@@ -805,27 +805,12 @@ fn browser_kind_serde_roundtrip() {
 
 #[test]
 fn browser_kind_from_str() {
-    assert_eq!(
-        "chrome".parse::<BrowserKind>().unwrap(),
-        BrowserKind::Chrome
-    );
-    assert_eq!(
-        "CHROME".parse::<BrowserKind>().unwrap(),
-        BrowserKind::Chrome
-    );
-    assert_eq!(
-        "google-chrome".parse::<BrowserKind>().unwrap(),
-        BrowserKind::Chrome
-    );
-    assert_eq!(
-        "microsoft-edge".parse::<BrowserKind>().unwrap(),
-        BrowserKind::Edge
-    );
-    assert_eq!(
-        "librewolf".parse::<BrowserKind>().unwrap(),
-        BrowserKind::LibreWolf
-    );
-    assert!("unknown-browser".parse::<BrowserKind>().is_err());
+    assert_eq!("chrome".parse::<Browser>().unwrap(), Browser::Chrome);
+    assert_eq!("CHROME".parse::<Browser>().unwrap(), Browser::Chrome);
+    assert_eq!("google-chrome".parse::<Browser>().unwrap(), Browser::Chrome);
+    assert_eq!("microsoft-edge".parse::<Browser>().unwrap(), Browser::Edge);
+    assert_eq!("librewolf".parse::<Browser>().unwrap(), Browser::LibreWolf);
+    assert!("unknown-browser".parse::<Browser>().is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -900,7 +885,7 @@ fn wal_data_readable_through_read_history_chromium() {
     assert!(wal_path.exists(), "WAL file should exist at {wal_path:?}");
 
     let source = BrowserSource {
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "wal-test".to_string(),
         db_path,
     };
@@ -919,7 +904,7 @@ fn wal_data_readable_individual_visits_chromium() {
     let (db_path, _guard) = create_wal_mode_chromium_db(src_dir.path());
 
     let source = BrowserSource {
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "wal-test".to_string(),
         db_path,
     };
@@ -990,7 +975,7 @@ fn wal_data_readable_through_read_history_firefox() {
     assert!(wal_path.exists(), "WAL file should exist at {wal_path:?}");
 
     let source = BrowserSource {
-        browser: BrowserKind::Firefox,
+        browser: Browser::Firefox,
         profile: "wal-test".to_string(),
         db_path,
     };
@@ -1063,7 +1048,7 @@ fn wal_data_readable_through_read_history_safari() {
     assert!(wal_path.exists(), "WAL file should exist at {wal_path:?}");
 
     let source = BrowserSource {
-        browser: BrowserKind::Safari,
+        browser: Browser::Safari,
         profile: "default".to_string(),
         db_path,
     };
@@ -1219,12 +1204,12 @@ fn read_all_merges_multiple_sources_sorted_by_visit_time_desc() {
 
     let sources = vec![
         BrowserSource {
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "Default".to_string(),
             db_path: dir.path().join("History"),
         },
         BrowserSource {
-            browser: BrowserKind::Firefox,
+            browser: Browser::Firefox,
             profile: "test-profile".to_string(),
             db_path: ff_dir.join("places.sqlite"),
         },
@@ -1241,9 +1226,9 @@ fn read_all_merges_multiple_sources_sorted_by_visit_time_desc() {
     assert_eq!(entries[2].url, "https://chrome-old.example.com"); // Jan 13
 
     // Verify browser tags are correct
-    assert_eq!(entries[0].browser, BrowserKind::Chrome);
-    assert_eq!(entries[1].browser, BrowserKind::Firefox);
-    assert_eq!(entries[2].browser, BrowserKind::Chrome);
+    assert_eq!(entries[0].browser, Browser::Chrome);
+    assert_eq!(entries[1].browser, Browser::Firefox);
+    assert_eq!(entries[2].browser, Browser::Chrome);
 
     // Verify profiles are correct
     assert_eq!(entries[0].profile, "Default");
@@ -1274,13 +1259,13 @@ fn read_all_continues_past_failing_source() {
     let sources = vec![
         // Valid source
         BrowserSource {
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "Default".to_string(),
             db_path: dir.path().join("History"),
         },
         // Invalid source: DB file doesn't exist
         BrowserSource {
-            browser: BrowserKind::Firefox,
+            browser: Browser::Firefox,
             profile: "missing".to_string(),
             db_path: dir.path().join("nonexistent.sqlite"),
         },
@@ -1291,7 +1276,7 @@ fn read_all_continues_past_failing_source() {
     // The valid source should have produced entries
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].url, "https://good-source.example.com");
-    assert_eq!(entries[0].browser, BrowserKind::Chrome);
+    assert_eq!(entries[0].browser, Browser::Chrome);
 
     // The invalid source should have produced an error
     assert_eq!(errors.len(), 1);
@@ -1321,7 +1306,7 @@ fn read_all_single_source() {
     );
 
     let sources = vec![BrowserSource {
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "Default".to_string(),
         db_path: dir.path().join("History"),
     }];
@@ -1341,12 +1326,12 @@ fn read_all_all_sources_fail() {
 
     let sources = vec![
         BrowserSource {
-            browser: BrowserKind::Chrome,
+            browser: Browser::Chrome,
             profile: "missing1".to_string(),
             db_path: dir.path().join("nonexistent1.sqlite"),
         },
         BrowserSource {
-            browser: BrowserKind::Firefox,
+            browser: Browser::Firefox,
             profile: "missing2".to_string(),
             db_path: dir.path().join("nonexistent2.sqlite"),
         },
@@ -1376,7 +1361,7 @@ fn read_all_respects_since_and_before_filters() {
     );
 
     let sources = vec![BrowserSource {
-        browser: BrowserKind::Chrome,
+        browser: Browser::Chrome,
         profile: "Default".to_string(),
         db_path: dir.path().join("History"),
     }];

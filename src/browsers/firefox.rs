@@ -1,11 +1,11 @@
-use super::{BrowserKind, BrowserSource, HistoryEntry};
+use super::{Browser, BrowserSource, HistoryEntry};
 use crate::error::Result;
 use crate::timestamp;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 
 /// Discover all Firefox-family browser profiles for the given browser kind.
-pub fn discover_profiles(kind: BrowserKind) -> Vec<BrowserSource> {
+pub fn discover_profiles(kind: Browser) -> Vec<BrowserSource> {
     let Some(profiles_dir) = browser_profiles_dir(kind) else {
         return Vec::new();
     };
@@ -201,16 +201,16 @@ mod tests {
 }
 
 /// Get the profiles directory for a Firefox-family browser on the current platform.
-fn browser_profiles_dir(kind: BrowserKind) -> Option<PathBuf> {
+fn browser_profiles_dir(kind: Browser) -> Option<PathBuf> {
     let home = dirs::home_dir()?;
 
     #[cfg(target_os = "macos")]
     {
         let base = home.join("Library/Application Support");
         match kind {
-            BrowserKind::Firefox => Some(base.join("Firefox/Profiles")),
-            BrowserKind::LibreWolf => Some(base.join("LibreWolf/Profiles")),
-            BrowserKind::Zen => Some(base.join("zen/Profiles")),
+            Browser::Firefox => Some(base.join("Firefox/Profiles")),
+            Browser::LibreWolf => Some(base.join("LibreWolf/Profiles")),
+            Browser::Zen => Some(base.join("zen/Profiles")),
             _ => None,
         }
     }
@@ -218,9 +218,9 @@ fn browser_profiles_dir(kind: BrowserKind) -> Option<PathBuf> {
     #[cfg(target_os = "linux")]
     {
         match kind {
-            BrowserKind::Firefox => Some(home.join(".mozilla/firefox")),
-            BrowserKind::LibreWolf => Some(home.join(".librewolf")),
-            BrowserKind::Zen => Some(home.join(".zen")),
+            Browser::Firefox => Some(home.join(".mozilla/firefox")),
+            Browser::LibreWolf => Some(home.join(".librewolf")),
+            Browser::Zen => Some(home.join(".zen")),
             _ => None,
         }
     }
@@ -229,9 +229,9 @@ fn browser_profiles_dir(kind: BrowserKind) -> Option<PathBuf> {
     {
         let roaming = dirs::data_dir()?;
         match kind {
-            BrowserKind::Firefox => Some(roaming.join("Mozilla/Firefox/Profiles")),
-            BrowserKind::LibreWolf => Some(roaming.join("librewolf/Profiles")),
-            BrowserKind::Zen => Some(roaming.join("zen/Profiles")),
+            Browser::Firefox => Some(roaming.join("Mozilla/Firefox/Profiles")),
+            Browser::LibreWolf => Some(roaming.join("librewolf/Profiles")),
+            Browser::Zen => Some(roaming.join("zen/Profiles")),
             _ => None,
         }
     }

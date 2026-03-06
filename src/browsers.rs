@@ -12,7 +12,7 @@ use std::str::FromStr;
 /// Identifies which browser produced a history entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum BrowserKind {
+pub enum Browser {
     Chrome,
     Chromium,
     Edge,
@@ -27,79 +27,77 @@ pub enum BrowserKind {
     Safari,
 }
 
-impl BrowserKind {
+impl Browser {
     /// All known browser kinds.
-    pub const ALL: &[BrowserKind] = &[
-        BrowserKind::Chrome,
-        BrowserKind::Chromium,
-        BrowserKind::Edge,
-        BrowserKind::Brave,
-        BrowserKind::Vivaldi,
-        BrowserKind::Opera,
-        BrowserKind::Arc,
-        BrowserKind::Firefox,
-        BrowserKind::LibreWolf,
-        BrowserKind::Zen,
-        BrowserKind::Safari,
+    pub const ALL: &[Browser] = &[
+        Browser::Chrome,
+        Browser::Chromium,
+        Browser::Edge,
+        Browser::Brave,
+        Browser::Vivaldi,
+        Browser::Opera,
+        Browser::Arc,
+        Browser::Firefox,
+        Browser::LibreWolf,
+        Browser::Zen,
+        Browser::Safari,
     ];
 
     /// The canonical lowercase name used in CLI flags and output.
     pub fn as_str(self) -> &'static str {
         match self {
-            BrowserKind::Chrome => "chrome",
-            BrowserKind::Chromium => "chromium",
-            BrowserKind::Edge => "edge",
-            BrowserKind::Brave => "brave",
-            BrowserKind::Vivaldi => "vivaldi",
-            BrowserKind::Opera => "opera",
-            BrowserKind::Arc => "arc",
-            BrowserKind::Firefox => "firefox",
-            BrowserKind::LibreWolf => "librewolf",
-            BrowserKind::Zen => "zen",
-            BrowserKind::Safari => "safari",
+            Browser::Chrome => "chrome",
+            Browser::Chromium => "chromium",
+            Browser::Edge => "edge",
+            Browser::Brave => "brave",
+            Browser::Vivaldi => "vivaldi",
+            Browser::Opera => "opera",
+            Browser::Arc => "arc",
+            Browser::Firefox => "firefox",
+            Browser::LibreWolf => "librewolf",
+            Browser::Zen => "zen",
+            Browser::Safari => "safari",
         }
     }
 
     /// The schema family this browser belongs to.
     pub fn schema_family(self) -> SchemaFamily {
         match self {
-            BrowserKind::Chrome
-            | BrowserKind::Chromium
-            | BrowserKind::Edge
-            | BrowserKind::Brave
-            | BrowserKind::Vivaldi
-            | BrowserKind::Opera
-            | BrowserKind::Arc => SchemaFamily::Chromium,
-            BrowserKind::Firefox | BrowserKind::LibreWolf | BrowserKind::Zen => {
-                SchemaFamily::Firefox
-            }
-            BrowserKind::Safari => SchemaFamily::Safari,
+            Browser::Chrome
+            | Browser::Chromium
+            | Browser::Edge
+            | Browser::Brave
+            | Browser::Vivaldi
+            | Browser::Opera
+            | Browser::Arc => SchemaFamily::Chromium,
+            Browser::Firefox | Browser::LibreWolf | Browser::Zen => SchemaFamily::Firefox,
+            Browser::Safari => SchemaFamily::Safari,
         }
     }
 }
 
-impl fmt::Display for BrowserKind {
+impl fmt::Display for Browser {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl FromStr for BrowserKind {
+impl FromStr for Browser {
     type Err = String;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "chrome" | "google-chrome" => Ok(BrowserKind::Chrome),
-            "chromium" => Ok(BrowserKind::Chromium),
-            "edge" | "microsoft-edge" => Ok(BrowserKind::Edge),
-            "brave" => Ok(BrowserKind::Brave),
-            "vivaldi" => Ok(BrowserKind::Vivaldi),
-            "opera" => Ok(BrowserKind::Opera),
-            "arc" => Ok(BrowserKind::Arc),
-            "firefox" => Ok(BrowserKind::Firefox),
-            "librewolf" => Ok(BrowserKind::LibreWolf),
-            "zen" => Ok(BrowserKind::Zen),
-            "safari" => Ok(BrowserKind::Safari),
+            "chrome" | "google-chrome" => Ok(Browser::Chrome),
+            "chromium" => Ok(Browser::Chromium),
+            "edge" | "microsoft-edge" => Ok(Browser::Edge),
+            "brave" => Ok(Browser::Brave),
+            "vivaldi" => Ok(Browser::Vivaldi),
+            "opera" => Ok(Browser::Opera),
+            "arc" => Ok(Browser::Arc),
+            "firefox" => Ok(Browser::Firefox),
+            "librewolf" => Ok(Browser::LibreWolf),
+            "zen" => Ok(Browser::Zen),
+            "safari" => Ok(Browser::Safari),
             _ => Err(format!("unknown browser: '{s}'")),
         }
     }
@@ -116,7 +114,7 @@ pub enum SchemaFamily {
 /// A discovered browser database on disk.
 #[derive(Debug, Clone)]
 pub struct BrowserSource {
-    pub browser: BrowserKind,
+    pub browser: Browser,
     pub profile: String,
     pub db_path: PathBuf,
 }
@@ -131,7 +129,7 @@ pub struct HistoryEntry {
     pub visit_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visit_duration_ms: Option<u64>,
-    pub browser: BrowserKind,
+    pub browser: Browser,
     pub profile: String,
 }
 
@@ -142,7 +140,7 @@ pub struct HistoryEntry {
 pub fn discover() -> Vec<BrowserSource> {
     let mut sources = Vec::new();
 
-    for &kind in BrowserKind::ALL {
+    for &kind in Browser::ALL {
         match kind.schema_family() {
             SchemaFamily::Chromium => {
                 sources.extend(chromium::discover_profiles(kind));

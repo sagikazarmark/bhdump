@@ -1,4 +1,4 @@
-use bhdump::browsers::{self, BrowserKind};
+use bhdump::browsers::{self, Browser};
 use bhdump::filter::{FilterConfig, SortKey, WhereExpr};
 use bhdump::format::{self, OutputFormat};
 use bhdump::timestamp;
@@ -47,7 +47,7 @@ enum Command {
 struct DumpArgs {
     /// Include only these browsers (can be repeated)
     #[arg(short, long = "browser", value_parser = parse_browser)]
-    browsers: Vec<BrowserKind>,
+    browsers: Vec<Browser>,
 
     /// Include only these profiles (can be repeated, case-insensitive)
     #[arg(short, long = "profile")]
@@ -106,7 +106,7 @@ struct DumpArgs {
     since_positional: Option<String>,
 }
 
-fn parse_browser(s: &str) -> Result<BrowserKind, String> {
+fn parse_browser(s: &str) -> Result<Browser, String> {
     s.parse()
 }
 

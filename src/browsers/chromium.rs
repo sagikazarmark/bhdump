@@ -1,11 +1,11 @@
-use super::{BrowserKind, BrowserSource, HistoryEntry};
+use super::{Browser, BrowserSource, HistoryEntry};
 use crate::error::Result;
 use crate::timestamp;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 
 /// Discover all Chromium-based browser profiles for the given browser kind.
-pub fn discover_profiles(kind: BrowserKind) -> Vec<BrowserSource> {
+pub fn discover_profiles(kind: Browser) -> Vec<BrowserSource> {
     let Some(base_dir) = browser_data_dir(kind) else {
         return Vec::new();
     };
@@ -209,20 +209,20 @@ mod tests {
 }
 
 /// Get the base data directory for a Chromium-based browser on the current platform.
-fn browser_data_dir(kind: BrowserKind) -> Option<PathBuf> {
+fn browser_data_dir(kind: Browser) -> Option<PathBuf> {
     let home = dirs::home_dir()?;
 
     #[cfg(target_os = "macos")]
     {
         let base = home.join("Library/Application Support");
         match kind {
-            BrowserKind::Chrome => Some(base.join("Google/Chrome")),
-            BrowserKind::Chromium => Some(base.join("Chromium")),
-            BrowserKind::Edge => Some(base.join("Microsoft Edge")),
-            BrowserKind::Brave => Some(base.join("BraveSoftware/Brave-Browser")),
-            BrowserKind::Vivaldi => Some(base.join("Vivaldi")),
-            BrowserKind::Opera => Some(base.join("com.operasoftware.Opera")),
-            BrowserKind::Arc => Some(base.join("Arc/User Data")),
+            Browser::Chrome => Some(base.join("Google/Chrome")),
+            Browser::Chromium => Some(base.join("Chromium")),
+            Browser::Edge => Some(base.join("Microsoft Edge")),
+            Browser::Brave => Some(base.join("BraveSoftware/Brave-Browser")),
+            Browser::Vivaldi => Some(base.join("Vivaldi")),
+            Browser::Opera => Some(base.join("com.operasoftware.Opera")),
+            Browser::Arc => Some(base.join("Arc/User Data")),
             _ => None,
         }
     }
@@ -231,12 +231,12 @@ fn browser_data_dir(kind: BrowserKind) -> Option<PathBuf> {
     {
         let config = home.join(".config");
         match kind {
-            BrowserKind::Chrome => Some(config.join("google-chrome")),
-            BrowserKind::Chromium => Some(config.join("chromium")),
-            BrowserKind::Edge => Some(config.join("microsoft-edge")),
-            BrowserKind::Brave => Some(config.join("BraveSoftware/Brave-Browser")),
-            BrowserKind::Vivaldi => Some(config.join("vivaldi")),
-            BrowserKind::Opera => Some(config.join("opera")),
+            Browser::Chrome => Some(config.join("google-chrome")),
+            Browser::Chromium => Some(config.join("chromium")),
+            Browser::Edge => Some(config.join("microsoft-edge")),
+            Browser::Brave => Some(config.join("BraveSoftware/Brave-Browser")),
+            Browser::Vivaldi => Some(config.join("vivaldi")),
+            Browser::Opera => Some(config.join("opera")),
             _ => None, // Arc not available on Linux
         }
     }
@@ -246,12 +246,12 @@ fn browser_data_dir(kind: BrowserKind) -> Option<PathBuf> {
         let local = dirs::data_local_dir()?;
         let roaming = dirs::data_dir()?;
         match kind {
-            BrowserKind::Chrome => Some(local.join("Google/Chrome/User Data")),
-            BrowserKind::Chromium => Some(local.join("chromium/User Data")),
-            BrowserKind::Edge => Some(local.join("Microsoft/Edge/User Data")),
-            BrowserKind::Brave => Some(local.join("BraveSoftware/Brave-Browser/User Data")),
-            BrowserKind::Vivaldi => Some(local.join("Vivaldi/User Data")),
-            BrowserKind::Opera => Some(roaming.join("Opera Software/Opera Stable")),
+            Browser::Chrome => Some(local.join("Google/Chrome/User Data")),
+            Browser::Chromium => Some(local.join("chromium/User Data")),
+            Browser::Edge => Some(local.join("Microsoft/Edge/User Data")),
+            Browser::Brave => Some(local.join("BraveSoftware/Brave-Browser/User Data")),
+            Browser::Vivaldi => Some(local.join("Vivaldi/User Data")),
+            Browser::Opera => Some(roaming.join("Opera Software/Opera Stable")),
             _ => None,
         }
     }

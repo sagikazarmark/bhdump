@@ -1,4 +1,4 @@
-use super::{BrowserKind, BrowserSource, HistoryEntry};
+use super::{Browser, BrowserSource, HistoryEntry};
 use crate::error::Result;
 use crate::timestamp;
 use chrono::{DateTime, Utc};
@@ -13,7 +13,7 @@ pub fn discover() -> Vec<BrowserSource> {
             let db_path = home.join("Library/Safari/History.db");
             if db_path.exists() {
                 return vec![BrowserSource {
-                    browser: BrowserKind::Safari,
+                    browser: Browser::Safari,
                     profile: "default".to_string(),
                     db_path,
                 }];

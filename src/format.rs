@@ -103,7 +103,7 @@ fn write_delimited<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browsers::BrowserKind;
+    use crate::browsers::Browser;
     use chrono::TimeZone;
 
     fn sample_entries() -> Vec<HistoryEntry> {
@@ -116,7 +116,7 @@ mod tests {
                     .unwrap(),
                 visit_count: Some(5),
                 visit_duration_ms: None,
-                browser: BrowserKind::Chrome,
+                browser: Browser::Chrome,
                 profile: "Default".to_string(),
             },
             HistoryEntry {
@@ -125,7 +125,7 @@ mod tests {
                 visit_time: chrono::Utc.with_ymd_and_hms(2024, 1, 14, 8, 0, 0).unwrap(),
                 visit_count: Some(1),
                 visit_duration_ms: Some(30000),
-                browser: BrowserKind::Firefox,
+                browser: Browser::Firefox,
                 profile: "default-release".to_string(),
             },
         ]
