@@ -44,6 +44,16 @@ impl WhereExpr {
         Ok(Self { program })
     }
 
+    /// Returns the variables and functions referenced by this expression.
+    pub fn references(&self) -> (Vec<String>, Vec<String>) {
+        let refs = self.program.references();
+        let mut vars: Vec<String> = refs.variables().into_iter().map(String::from).collect();
+        let mut funcs: Vec<String> = refs.functions().into_iter().map(String::from).collect();
+        vars.sort();
+        funcs.sort();
+        (vars, funcs)
+    }
+
     /// Evaluate the expression against a history entry. Returns `true` if the
     /// entry matches, `false` otherwise, or an error if execution fails.
     pub fn matches(&self, entry: &HistoryEntry) -> Result<bool, Error> {

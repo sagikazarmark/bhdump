@@ -2,14 +2,49 @@ use bhdump::browsers::{self, BrowserKind};
 use bhdump::filter::{FilterConfig, SortKey, WhereExpr};
 use bhdump::format::{self, OutputFormat};
 use bhdump::timestamp;
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use std::process::ExitCode;
 
 /// Export browser history in JSON, CSV, and other formats.
+///
+/// When no subcommand is given, bhdump exports history (same as "bhdump dump").
 #[derive(Parser, Debug)]
 #[command(name = "bhdump", version, about, after_long_help = FILTER_HELP)]
+#[command(args_conflicts_with_subcommands = true)]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    #[command(flatten)]
+    dump: DumpArgs,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Export browser history
+    #[command(after_long_help = FILTER_HELP)]
+    Dump(DumpArgs),
+
+    /// List detected browsers and profiles
+    Browsers,
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
+
+    /// Validate a CEL filter expression
+    Validate {
+        /// CEL expression to validate (e.g. 'url.contains("github")')
+        #[arg(value_name = "EXPR")]
+        expression: String,
+    },
+}
+
+#[derive(Parser, Debug, Default)]
+struct DumpArgs {
     /// Include only these browsers (can be repeated)
     #[arg(short, long = "browser", value_parser = parse_browser)]
     browsers: Vec<BrowserKind>,
@@ -61,14 +96,6 @@ struct Cli {
     /// Output individual visits instead of per-URL summary
     #[arg(long)]
     visits: bool,
-
-    /// List detected browsers and profiles, then exit
-    #[arg(long)]
-    list_browsers: bool,
-
-    /// Generate shell completions and exit (bash, zsh, fish, elvish, powershell)
-    #[arg(long, value_name = "SHELL")]
-    completions: Option<Shell>,
 
     /// Increase verbosity
     #[arg(short, long, action = clap::ArgAction::Count)]
@@ -136,6 +163,7 @@ const FILTER_HELP: &str = "\
     --where '!url.matches(\"reddit\\\\.com\")'
     --where 'visit_time > timestamp(\"2024-06-01T00:00:00Z\")'
 
+  Use \"bhdump validate <EXPR>\" to check an expression without running a query.
   See https://cel-spec.dev for the full CEL specification.
 
 \x1b[1;4mSort Order\x1b[0m
@@ -191,38 +219,91 @@ const FILTER_HELP: &str = "\
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    // Generate shell completions and exit
-    if let Some(shell) = cli.completions {
-        let mut cmd = Cli::command();
-        clap_complete::generate(shell, &mut cmd, "bhdump", &mut std::io::stdout());
-        return ExitCode::SUCCESS;
+    match cli.command {
+        Some(Command::Completions { shell }) => cmd_completions(shell),
+        Some(Command::Browsers) => cmd_browsers(),
+        Some(Command::Validate { expression }) => cmd_validate(&expression),
+        Some(Command::Dump(args)) => cmd_dump(args),
+        None => cmd_dump(cli.dump),
+    }
+}
+
+fn cmd_completions(shell: Shell) -> ExitCode {
+    let mut cmd = Cli::command();
+    clap_complete::generate(shell, &mut cmd, "bhdump", &mut std::io::stdout());
+    ExitCode::SUCCESS
+}
+
+fn cmd_browsers() -> ExitCode {
+    let all_sources = browsers::discover();
+
+    if all_sources.is_empty() {
+        eprintln!("No browsers detected.");
+        return ExitCode::from(1);
     }
 
+    for source in &all_sources {
+        println!(
+            "{}\t{}\t{}",
+            source.browser,
+            source.profile,
+            source.db_path.display()
+        );
+    }
+
+    ExitCode::SUCCESS
+}
+
+const KNOWN_VARIABLES: &[&str] = &[
+    "browser",
+    "domain",
+    "profile",
+    "title",
+    "url",
+    "visit_count",
+    "visit_time",
+];
+
+fn cmd_validate(expression: &str) -> ExitCode {
+    let compiled = match WhereExpr::compile(expression) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Invalid expression: {e}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let (vars, _funcs) = compiled.references();
+    let unknown: Vec<_> = vars
+        .iter()
+        .filter(|v| !KNOWN_VARIABLES.contains(&v.as_str()))
+        .collect();
+
+    if unknown.is_empty() {
+        println!("Expression is valid.");
+    } else {
+        println!("Expression is valid, but references unknown variables:");
+        for var in &unknown {
+            eprintln!(
+                "  Warning: unknown variable \"{var}\" (available: {})",
+                KNOWN_VARIABLES.join(", ")
+            );
+        }
+    }
+
+    ExitCode::SUCCESS
+}
+
+fn cmd_dump(args: DumpArgs) -> ExitCode {
     // Discover browsers
     let all_sources = browsers::discover();
 
-    if cli.list_browsers {
-        if all_sources.is_empty() {
-            eprintln!("No browsers detected.");
-            return ExitCode::from(1);
-        }
-        for source in &all_sources {
-            println!(
-                "{}\t{}\t{}",
-                source.browser,
-                source.profile,
-                source.db_path.display()
-            );
-        }
-        return ExitCode::SUCCESS;
-    }
-
     // Filter sources by browser and profile selection
-    let profiles_lower: Vec<String> = cli.profiles.iter().map(|p| p.to_lowercase()).collect();
+    let profiles_lower: Vec<String> = args.profiles.iter().map(|p| p.to_lowercase()).collect();
     let sources: Vec<_> = all_sources
         .into_iter()
         .filter(|s| {
-            if !cli.browsers.is_empty() && !cli.browsers.contains(&s.browser) {
+            if !args.browsers.is_empty() && !args.browsers.contains(&s.browser) {
                 return false;
             }
             if !profiles_lower.is_empty() && !profiles_lower.contains(&s.profile.to_lowercase()) {
@@ -238,7 +319,7 @@ fn main() -> ExitCode {
     }
 
     // Resolve --since vs positional shorthand
-    let since_raw = match (&cli.since, &cli.since_positional) {
+    let since_raw = match (&args.since, &args.since_positional) {
         (Some(_), Some(_)) => {
             eprintln!("Error: cannot use both --since and a positional time argument");
             return ExitCode::from(2);
@@ -257,7 +338,7 @@ fn main() -> ExitCode {
         None => None,
     };
 
-    let before = match cli.before.as_deref().map(timestamp::parse_user_datetime) {
+    let before = match args.before.as_deref().map(timestamp::parse_user_datetime) {
         Some(Ok(dt)) => Some(dt),
         Some(Err(e)) => {
             eprintln!("Error parsing --before: {e}");
@@ -267,7 +348,7 @@ fn main() -> ExitCode {
     };
 
     // Read history from all sources
-    let (entries, errors) = browsers::read_all(&sources, since, before, cli.visits);
+    let (entries, errors) = browsers::read_all(&sources, since, before, args.visits);
 
     // Report errors on stderr
     for err in &errors {
@@ -280,7 +361,7 @@ fn main() -> ExitCode {
     }
 
     // Build filter config
-    let filter_config = match build_filter(&cli) {
+    let filter_config = match build_filter(&args) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("Error: {e}");
@@ -298,7 +379,7 @@ fn main() -> ExitCode {
     };
 
     // Write output
-    let result = if let Some(ref path) = cli.output {
+    let result = if let Some(ref path) = args.output {
         let file = match std::fs::File::create(path) {
             Ok(f) => f,
             Err(e) => {
@@ -307,10 +388,10 @@ fn main() -> ExitCode {
             }
         };
         let mut writer = std::io::BufWriter::new(file);
-        format::write_entries(&mut writer, &filtered, cli.format)
+        format::write_entries(&mut writer, &filtered, args.format)
     } else {
         let mut stdout = std::io::stdout().lock();
-        format::write_entries(&mut stdout, &filtered, cli.format)
+        format::write_entries(&mut stdout, &filtered, args.format)
     };
 
     if let Err(e) = result {
@@ -321,8 +402,8 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn build_filter(cli: &Cli) -> Result<FilterConfig, String> {
-    let where_expr = cli
+fn build_filter(args: &DumpArgs) -> Result<FilterConfig, String> {
+    let where_expr = args
         .where_expr
         .as_deref()
         .map(WhereExpr::compile)
@@ -331,10 +412,10 @@ fn build_filter(cli: &Cli) -> Result<FilterConfig, String> {
 
     Ok(FilterConfig {
         where_expr,
-        limit: cli.limit,
-        deduplicate: cli.dedup,
-        include_internal: cli.include_internal,
-        include_noise: cli.include_noise,
-        sort: cli.sort,
+        limit: args.limit,
+        deduplicate: args.dedup,
+        include_internal: args.include_internal,
+        include_noise: args.include_noise,
+        sort: args.sort,
     })
 }
