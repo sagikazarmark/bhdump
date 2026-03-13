@@ -20,7 +20,7 @@ path = "src/main.rs"
 [dependencies]
 cel-interpreter = { version = "0.10", features = ["chrono", "regex"] }
 chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 clap_complete = "4.5"
 csv = "1.4"
 dirs = "6.0"
